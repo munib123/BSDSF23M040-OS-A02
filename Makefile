@@ -12,7 +12,7 @@ TARGET = $(BIN_DIR)/ls
 # Main targets
 all: $(TARGET)
 
-$(TARGET): $(SRC_DIR)/ls-v1.5.0.c | $(BIN_DIR) $(OBJ_DIR)
+$(TARGET): $(SRC_DIR)/ls-v1.6.0.c | $(BIN_DIR) $(OBJ_DIR)
 	$(CC) $(CFLAGS) -o $@ $<
 
 # Create directories
