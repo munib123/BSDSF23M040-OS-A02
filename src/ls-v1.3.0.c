@@ -36,7 +36,31 @@ void mode_to_str(mode_t mode, char *str) {
     if (mode & S_ISVTX) str[9] = (mode & S_IXOTH) ? 't' : 'T';
 }
 
-void do_ls(char *dirname, int long_format) {
+void print_horizontal(char **files, int count) {
+    int max_len = 0;
+    for (int i = 0; i < count; i++) {
+        int len = strlen(files[i]);
+        if (len > max_len) max_len = len;
+    }
+    int col_width = max_len + 2;
+
+    struct winsize w;
+    ioctl(STDOUT_FILENO, TIOCGWINSZ, &w);
+    int term_width = w.ws_col ? w.ws_col : 80;
+
+    int current_pos = 0;
+    for (int i = 0; i < count; i++) {
+        if (current_pos + col_width > term_width) {
+            printf("\n");
+            current_pos = 0;
+        }
+        printf("%-*s", col_width, files[i]);
+        current_pos += col_width;
+    }
+    printf("\n");
+}
+
+void do_ls(char *dirname, int long_format, int horizontal) {
     DIR *dir = opendir(dirname);
     if (dir == NULL) { 
         perror("opendir"); 
@@ -95,33 +119,37 @@ void do_ls(char *dirname, int long_format) {
                 files[i]);
         }
     } else {
-        // Find max filename length
-        int max_len = 0;
-        for (int i = 0; i < count; i++) {
-            int len = strlen(files[i]);
-            if (len > max_len) max_len = len;
-        }
-        int col_width = max_len + 2;  // Spacing
-
-        // Get terminal width
-        struct winsize w;
-        ioctl(STDOUT_FILENO, TIOCGWINSZ, &w);
-        int term_width = w.ws_col;
-        if (term_width <= 0) term_width = 80;  // Fallback
-
-        int num_cols = term_width / col_width;
-        if (num_cols < 1) num_cols = 1;
-        int num_rows = (count + num_cols - 1) / num_cols;
-
-        // Print in "down then across" format
-        for (int row = 0; row < num_rows; row++) {
-            for (int col = 0; col < num_cols; col++) {
-                int idx = col * num_rows + row;
-                if (idx < count) {
-                    printf("%-*s", col_width, files[idx]);
-                }
+        if (horizontal) {
+            print_horizontal(files, count);
+        } else {
+            // Find max filename length
+            int max_len = 0;
+            for (int i = 0; i < count; i++) {
+                int len = strlen(files[i]);
+                if (len > max_len) max_len = len;
             }
-            printf("\n");
+            int col_width = max_len + 2;  // Spacing
+
+            // Get terminal width
+            struct winsize w;
+            ioctl(STDOUT_FILENO, TIOCGWINSZ, &w);
+            int term_width = w.ws_col;
+            if (term_width <= 0) term_width = 80;  // Fallback
+
+            int num_cols = term_width / col_width;
+            if (num_cols < 1) num_cols = 1;
+            int num_rows = (count + num_cols - 1) / num_cols;
+
+            // Print in "down then across" format
+            for (int row = 0; row < num_rows; row++) {
+                for (int col = 0; col < num_cols; col++) {
+                    int idx = col * num_rows + row;
+                    if (idx < count) {
+                        printf("%-*s", col_width, files[idx]);
+                    }
+                }
+                printf("\n");
+            }
         }
     }
     // Free memory
@@ -131,25 +159,29 @@ void do_ls(char *dirname, int long_format) {
 
 int main(int argc, char *argv[]) {
     int long_format = 0;
+    int horizontal = 0;
     int opt;
     
-    while ((opt = getopt(argc, argv, "l")) != -1) {
+    while ((opt = getopt(argc, argv, "lx")) != -1) {
         switch (opt) {
             case 'l':
                 long_format = 1;
                 break;
+            case 'x':
+                horizontal = 1;
+                break;
             default:
-                fprintf(stderr, "Usage: %s [-l] [dir]\n", argv[0]);
+                fprintf(stderr, "Usage: %s [-l] [-x] [dir]\n", argv[0]);
                 exit(1);
         }
     }
     
     // Handle remaining arguments (directories)
     if (optind >= argc) {
-        do_ls(".", long_format);  // Current directory if no args
+        do_ls(".", long_format, horizontal);  // Current directory if no args
     } else {
         for (int i = optind; i < argc; i++) {
-            do_ls(argv[i], long_format);
+            do_ls(argv[i], long_format, horizontal);
         }
     }
     return 0;
