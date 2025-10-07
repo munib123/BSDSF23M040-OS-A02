@@ -7,6 +7,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <sys/stat.h>
+#include <sys/ioctl.h>
 #include <pwd.h>
 #include <grp.h>
 #include <time.h>
@@ -94,9 +95,33 @@ void do_ls(char *dirname, int long_format) {
                 files[i]);
         }
     } else {
-        // Original single column
+        // Find max filename length
+        int max_len = 0;
         for (int i = 0; i < count; i++) {
-            printf("%s\n", files[i]);
+            int len = strlen(files[i]);
+            if (len > max_len) max_len = len;
+        }
+        int col_width = max_len + 2;  // Spacing
+
+        // Get terminal width
+        struct winsize w;
+        ioctl(STDOUT_FILENO, TIOCGWINSZ, &w);
+        int term_width = w.ws_col;
+        if (term_width <= 0) term_width = 80;  // Fallback
+
+        int num_cols = term_width / col_width;
+        if (num_cols < 1) num_cols = 1;
+        int num_rows = (count + num_cols - 1) / num_cols;
+
+        // Print in "down then across" format
+        for (int row = 0; row < num_rows; row++) {
+            for (int col = 0; col < num_cols; col++) {
+                int idx = col * num_rows + row;
+                if (idx < count) {
+                    printf("%-*s", col_width, files[idx]);
+                }
+            }
+            printf("\n");
         }
     }
     // Free memory
